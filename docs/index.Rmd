@@ -28,3 +28,83 @@ plot(pressure)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+---
+
+In this report, the effect of seasonal depression in Scotland will be assessed.
+
+```{r}
+library(tidyverse)
+library(janitor) # cleaning data
+library(gt) # tables
+library(here) # directory structure (will be useful later)
+
+antidepre <- c("FLUOX|SERTRA|CITALO|PAROXE|ESCITA|FLUVO|VENLAF|DULOXE|DESVEN|LEVOMIL|BUPROP|MIRTA|TRAZO|VORTIOX|NEFAZO|AMITRI|NORTRI|IMIPRA|CLOMI|DESIPRA|DOXEP|TRIMIPRA|PROTRIPT|PHENELZ|TRANYLCY|ISOCARBO|SELEGI|ARIPI|QUETIAPI|OLANZAP|BREXI|LITH|LAMOTRI|VALPROA|LORAZE|CLONAZE|DIAZE|ALPRAZOL")
+
+data_dec23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/00cdf8d7-f784-4e87-894c-34f2540ea6ab/download/pitc202312.csv") %>% 
+  clean_names()
+
+antidepre_data_dec <- data_dec23 %>% 
+  filter(str_detect(bnf_item_description, antidepre)) %>% 
+  group_by(hbt, bnf_item_description) %>% 
+  summarise(number_of_paid_items = sum(number_of_paid_items))
+
+total_dec <- antidepre_data_dec %>% 
+  group_by(hbt) %>% 
+  summarise(number_of_paid_items = sum(number_of_paid_items))
+
+```
+
+We just calculated the total antidepressants prescribed in Scotland in December divided by the region. Now we will do the same thing for November.
+
+```{r}
+data_jan24 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/d3eaaf84-0f3b-4fb8-9460-e33503095fbe/download/pitc202401.csv") %>% 
+  clean_names()
+
+
+antidepre_data_jan <- data_jan24 %>% 
+  filter(str_detect(bnf_item_description, antidepre)) %>% 
+  group_by(hbt, bnf_item_description) %>% 
+  summarise(number_of_paid_items = sum(number_of_paid_items))
+
+total_jan <- antidepre_data_jan %>% 
+  group_by(hbt) %>% 
+  summarise(number_of_paid_items = sum(number_of_paid_items))
+
+
+
+data_feb24 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/86fda652-0e1d-48bb-9368-aa2a560d925b/download/pitc202402.csv") %>% 
+  clean_names()
+
+antidepre_data_feb <- data_feb24 %>% 
+  filter(str_detect(bnf_item_description, antidepre)) %>% 
+  group_by(hbt, bnf_item_description) %>% 
+  summarise(number_of_paid_items = sum(number_of_paid_items))
+
+total_feb <- antidepre_data_feb %>% 
+  group_by(hbt) %>% 
+  summarise(number_of_paid_items = sum(number_of_paid_items))
+
+
+data_mar24 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/a42762ac-47cb-4fb6-b9b1-2478a588c0ed/download/pitc202403.csv") %>% 
+  clean_names()
+
+antidepre_data_mar <- data_mar24 %>% 
+  filter(str_detect(bnf_item_description, antidepre)) %>% 
+  group_by(hbt, bnf_item_description) %>% 
+  summarise(number_of_paid_items = sum(number_of_paid_items))
+
+total_mar <- antidepre_data_mar %>% 
+  group_by(hbt) %>% 
+  summarise(number_of_paid_items = sum(number_of_paid_items))
+
+```
+
+Now we will join the winter months Dec, Jan, Feb, March.
+
+```{r}
+
+joined_data <- total_dec %>% 
+  full_join(total_jan, by = "hbt")
+
+```
+

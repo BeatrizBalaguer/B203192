@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo=TRUE, message=FALSE, warnings=FALSE)
 ```
 
 In this report, the effect of seasonal depression in Scotland will be assessed.
@@ -16,26 +16,7 @@ library(tidyverse)
 library(janitor) # cleaning data
 library(gt) # tables
 library(here) # directory structure (will be useful later)
-
-#https://beatrizbalaguer.github.io/B203192/
-
-#data_dec22 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/00213ffa-941e-4389-9e6f-3bca8067da8c/download/pitc202212.csv") %>% 
-  clean_names()
-
-data_jan23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/6caa7144-f0e4-4ab0-b9e4-8fa10c8edf1c/download/pitc202301.csv") %>% 
-  clean_names()
-
-data_feb23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/ad6d7f4e-08fd-40ed-ad49-bf450d386f39/download/pitc202302.csv") %>% 
-  clean_names()
-
-data_mar23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/8dd06c58-1a09-483a-8a01-5d68cfb8b38e/download/pitc202303.csv") %>% 
-  clean_names()
-
-data_april23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/720699b0-7584-4ddb-9915-79b298189d1d/download/pitc202304.csv") %>% 
-  clean_names()
-
-data_may23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/a0cf1a9f-d8c3-4bda-a8d9-733897c4c288/download/pitc202305.csv") %>% 
-  clean_names()
+library(glue)
 
 data_june23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/66e9611a-fbea-45b2-9edd-351c388fd06d/download/pitc202306.csv") %>% 
   clean_names()
@@ -50,7 +31,12 @@ data_sept23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0
   clean_names()
 
 data_oct2023 <- read_csv( "https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/94134438-db1d-4b8d-8f70-5e9b0e47bd03/download/pitc202310.csv") %>% 
-  clean_names
+  clean_names()
+
+```
+
+
+```{r}
 
 data_nov23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/21d11fed-a494-4e30-9bb6-46143c3b9530/download/pitc202311.csv") %>% 
   clean_names()
@@ -58,54 +44,30 @@ data_nov23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d
 data_dec23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/00cdf8d7-f784-4e87-894c-34f2540ea6ab/download/pitc202312.csv") %>% 
   clean_names()
 
-nhs_board <- NHS_healthboards %>% 
-  select(hb, hb_name)
-
 population_data <- read_csv("https://www.opendata.nhs.scot/dataset/7f010430-6ce1-4813-b25c-f7f335bdc4dc/resource/27a72cc8-d6d8-430c-8b4f-3109a9ceadb1/download/hb2019_pop_est_14102024.csv") %>% 
   clean_names()
 
 NHS_healthboards <- read_csv("https://www.opendata.nhs.scot/dataset/9f942fdb-e59e-44f5-b534-d6e17229cc7b/resource/652ff726-e676-4a20-abda-435b98dd7bdc/download/hb14_hb19.csv") %>% 
   clean_names()
 
+nhs_board <- NHS_healthboards %>% 
+  select(hb, hb_name)
+
 #it is aggregated data, we choose All
 population_data2023 <- population_data %>% 
   filter(year == "2023" & sex == "All") %>% 
   select(hb, all_ages)
 
-#gp_practice
-
-gp_practice_raw <- read_csv("https://www.opendata.nhs.scot/dataset/f23655c3-6e23-4103-a511-a80d998adb90/resource/b3b126d3-3b0c-4856-b348-0b37f8286367/download/practice_contactdetails_apr2024-open-data.csv") %>% 
-  clean_names()
-
-gp_practice <- gp_practice_raw %>% 
-  select(hb, practice_code, data_zone)%>% 
-  rename( gp_practice = practice_code)
-
-data_zone_raw <- read_csv("https://www.opendata.nhs.scot/dataset/9f942fdb-e59e-44f5-b534-d6e17229cc7b/resource/395476ab-0720-4740-be07-ff4467141352/download/dz2011_codes_and_labels_21042020.csv") %>% 
-  clean_names()
-
-data_zone1 <- data_zone_raw %>% 
-  select(data_zone, int_zone, int_zone_name)
-
-data_zone2 <- data_zone1 %>%
-  full_join(gp_practice, join_by("data_zone")) %>% 
-  group_by(int_zone_name, data_zone) %>% 
-  arrange(practice_code)
-
-
 ```
 
 SCABBIES??
+We created a factor including the different treatments for scabbies: topical (permethrin cream, malathion lotion, benzyl benzoate lotion, crotamiton cream and sulfur ointment), oral (ivermectin).
 
 ```{r}
-scabbies <- c("PERMET|MALATHI|BENZYL| CROTAM|SULFUR|IVERM")
-  
-dataset_year23 <- list(January = data_jan23,
-                           February = data_feb23,
-                           March = data_mar23,
-                           April = data_april23,
-                           May = data_may23,
-                           June = data_june23,
+scabbies <- c("PERMETHRIN 5| PERMETHRIN_CR|MALATHI|BENZYL BENZOA| CROTAM|IVERMECTIN 3")
+
+
+dataset_year23 <- list(June = data_june23,
                            July = data_july23,
                            August = data_aug23,
                            September = data_sept23,
@@ -113,29 +75,47 @@ dataset_year23 <- list(January = data_jan23,
                            November = data_nov23,
                            December = data_dec23)
 
+separated_data <- dataset_year23 %>%
+  imap_dfr(~ .x %>%
+            select(hbt, gp_practice, bnf_item_description, number_of_paid_items) %>% 
+  filter(str_detect(bnf_item_description, scabbies)) %>% 
+             mutate(month = .y))
+
+sep_with_names_sc <- separated_data %>% 
+  full_join(nhs_board, join_by(hbt == hb))
+
+sep_with_population_sc <- sep_with_names_sc %>% 
+  full_join(population_data2023, join_by(hbt == hb))
+
+sep_table <- sep_with_population_sc %>% 
+  group_by(hb_name, bnf_item_description) %>% 
+  select(hb_name, bnf_item_description, number_of_paid_items) %>%
+  summarise(sum(number_of_paid_items)) %>% 
+  gt()
+
+sep_table
+
 total_data23_sc <- dataset_year23 %>%
   imap_dfr(~ .x %>%
-             filter(str_detect(bnf_item_description, scabbies)) %>%
+             filter(str_detect(bnf_item_description, scabbies) & !is.na(bnf_item_description)) %>%
              group_by(hbt, gp_practice) %>%
              summarise(number_of_paid_items = sum(number_of_paid_items, na.rm = TRUE), .groups = "drop") %>%
              mutate(month = .y))
 
-with_gp <- total_data23_sc %>% 
-  full_join(gp_practice)
+#with_gp <- total_data23_sc %>% 
+  #full_join(gp_practice)
 
 with_names_sc <- total_data23_sc %>% 
-  full_join(nhs_board, join_by(hbt == hb))
+  full_join(nhs_board, join_by(hbt == hb)) 
 
-with_population_sc <- with_names_sc %>% 
-  full_join(population_data2023, join_by(hbt == hb))
-
-plotted_data23_sc <- with_population_sc %>% 
+plotted_data23_sc <- with_names_sc %>% 
   ggplot(aes(x = month, y = number_of_paid_items))+
   geom_col()+
    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
-  scale_x_discrete(limits = c("January", "February", "March","April", "May","June", "July", "August","September","October", "November","December"))+
+  scale_x_discrete(limits = c("June", "July", "August","September","October", "November","December"))+
   facet_wrap(~hb_name)
 
+plotted_data23_sc
 
 ```
 

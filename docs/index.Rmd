@@ -58,14 +58,6 @@ population_data2023 <- population_data %>%
   filter(year == "2023" & sex == "All") %>% 
   select(hb, all_ages)
 
-```
-
-SCABBIES??
-We created a factor including the different treatments for scabbies: topical (permethrin cream, malathion lotion, benzyl benzoate lotion, crotamiton cream and sulfur ointment), oral (ivermectin).
-
-```{r}
-scabbies <- c("PERMETHRIN 5| PERMETHRIN_CR|MALATHI|BENZYL BENZOA| CROTAM|IVERMECTIN 3")
-
 
 dataset_year23 <- list(June = data_june23,
                            July = data_july23,
@@ -75,29 +67,18 @@ dataset_year23 <- list(June = data_june23,
                            November = data_nov23,
                            December = data_dec23)
 
-separated_data <- dataset_year23 %>%
-  imap_dfr(~ .x %>%
-            select(hbt, gp_practice, bnf_item_description, number_of_paid_items) %>% 
-  filter(str_detect(bnf_item_description, scabbies)) %>% 
-             mutate(month = .y))
+```
 
-sep_with_names_sc <- separated_data %>% 
-  full_join(nhs_board, join_by(hbt == hb))
+We created a factor including the different treatments for scabies: topical (permethrin cream, malathion lotion, benzyl benzoate lotion, crotamiton cream and sulfur ointment), oral (ivermectin). Then the datasets were filtered for these medications, excluding any missing values...
 
-sep_with_population_sc <- sep_with_names_sc %>% 
-  full_join(population_data2023, join_by(hbt == hb))
+To show the trend of the outbreak during the selected months, we joned all the datasets using a list... 
 
-sep_table <- sep_with_population_sc %>% 
-  group_by(hb_name, bnf_item_description) %>% 
-  select(hb_name, bnf_item_description, number_of_paid_items) %>%
-  summarise(sum(number_of_paid_items)) %>% 
-  gt()
-
-sep_table
+```{r}
+scabies <- c("PERMETHRIN 5| PERMETHRIN_CR|MALATHI|BENZYL BENZOA| CROTAM|IVERMECTIN 3")
 
 total_data23_sc <- dataset_year23 %>%
   imap_dfr(~ .x %>%
-             filter(str_detect(bnf_item_description, scabbies) & !is.na(bnf_item_description)) %>%
+           filter(str_detect(bnf_item_description, scabies) & !is.na(bnf_item_description)) %>%
              group_by(hbt, gp_practice) %>%
              summarise(number_of_paid_items = sum(number_of_paid_items, na.rm = TRUE), .groups = "drop") %>%
              mutate(month = .y))
@@ -105,17 +86,108 @@ total_data23_sc <- dataset_year23 %>%
 #with_gp <- total_data23_sc %>% 
   #full_join(gp_practice)
 
+
+
 with_names_sc <- total_data23_sc %>% 
-  full_join(nhs_board, join_by(hbt == hb)) 
+  full_join(nhs_board, join_by(hbt == hb)) %>% 
+  mutate(month = factor(month, levels = c("June", "July", "August", 
+                                          "September", "October", 
+                                          "November", "December"), 
+                        ordered = TRUE)) %>% 
+  arrange(hb_name, month)
 
-plotted_data23_sc <- with_names_sc %>% 
-  ggplot(aes(x = month, y = number_of_paid_items))+
-  geom_col()+
-   theme(axis.text.x = element_text(angle = 90, hjust = 1))+
-  scale_x_discrete(limits = c("June", "July", "August","September","October", "November","December"))+
-  facet_wrap(~hb_name)
 
-plotted_data23_sc
+#Trend over the months 
+no_gp <- with_names_sc %>% 
+  filter(!is.na(month)) %>% 
+  group_by(month, hb_name) %>% 
+  summarise(number_of_paid_items = sum(number_of_paid_items))
+
+sc_line <- no_gp %>% 
+  ggplot(aes(x= month, y = number_of_paid_items))+
+  geom_line(aes(group = hb_name, colour = hb_name), size = 1) +
+  labs(title = "Scabies Outbreak in Scotland (June to December 2023)", subtitle = "Monthly Trends in Scabies Treatment Prescriptions", x = "Month", y = "Number of Antiparasitic Prescriptions", colour = "Health Board")+
+  theme_bw()+
+  guides(colour = guide_legend(title.position = "top", title.hjust = 0.5))+
+  theme(legend.position = "bottom", legend.direction = "horizontal")+
+  geom_text(data=. %>% 
+              arrange(desc(month)) %>% 
+              group_by(hb_name) %>% 
+              slice(1), 
+            aes(label=number_of_paid_items), 
+            position=position_nudge(0.1), hjust=0, show.legend=FALSE)+
+  scale_color_manual(values=c("#e6194b", "#ffe119", "#4363d8", "#f58231", 
+              "#911eb4", "#46f0f0", "#f032e6", "#bcf60c", "#3cb44b", "#fabebe",
+              "#008080", "#e6beff", "#9a6324", "#fffac8"))
+
+sc_line
+
+```
+
+We will now analyse what are the preferred medication for scabies treatment.
+
+```{r}
+
+separated_data <- dataset_year23 %>%
+  imap_dfr(~ .x %>%
+            select(hbt, gp_practice, bnf_item_description, number_of_paid_items) %>% 
+  filter(str_detect(bnf_item_description, scabies)) %>% 
+             mutate(month = .y))
+
+sep_with_names_sc <- separated_data %>% 
+  full_join(nhs_board, join_by(hbt == hb)) %>% 
+  filter(!is.na(number_of_paid_items))
+
+sep_with_population_sc <- sep_with_names_sc %>% 
+  full_join(population_data2023, join_by(hbt == hb)) 
+
+sep_bar <- sep_with_names_sc %>% 
+  ggplot(aes(x = hb_name, y = number_of_paid_items))+ scale_fill_brewer(palette = "Spectral")+
+  geom_col(aes(fill = bnf_item_description), width = .5)+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 65, hjust = 1))+
+  labs(title = "Preferred Scabies Treatments Across Scotland", subtitle = "Breakdown by health board and treatment type (June - December 2023)", x = "Health Board", y = "Number of Prescriptions", fill = "Antiparasitic Medication")
+
+sep_bar
+
+```
+
+In this histogram, it is represented how the most common medication for scabies was permethrin cream. Which has been seen to have an impact on the resistance of scabies to permethrin, causing some resistances of permethrin. Moreover, this relationship between different scabies treatments might vary between countries, as in Scotland the production of ivermectin is based in Ukraine, leading to shortages of this medication???????? (REFERENCE!).
+
+To visualize the relationship between the different medications, a table using the percentages of the prescription of each medication per each health board has been made. We will focus on the top 5 more affected parts of Scotland??????(wouldnt this depend on rate??). 
+
+```{r}
+
+total_presc_table <- sep_with_names_sc %>%
+  group_by(hb_name, month) %>%
+  summarise(total_prescriptions = sum(number_of_paid_items)) %>%
+  ungroup()
+
+
+presc_table <- sep_with_names_sc %>% 
+  filter(!is.na(bnf_item_description)) %>%
+  group_by(hb_name, month, bnf_item_description) %>% 
+  summarise(treatment_prescriptions = sum(number_of_paid_items, na.rm = TRUE)) %>% 
+  full_join(total_presc_table, by = c("hb_name", "month")) %>% 
+  mutate(percentage = (treatment_prescriptions / total_prescriptions) * 100)%>%
+  group_by(hb_name) %>% 
+  select(hb_name, month, bnf_item_description, percentage) %>% 
+  mutate(month = factor(month, levels = c("June", "July", "August", "September", "October", "November", "December"))) %>%
+  arrange(hb_name, month) %>%
+  pivot_wider(names_from = bnf_item_description, values_from = percentage) %>%
+  replace_na(list("MALATHION 0.5% AQUEOUS LIQUID" = 0, "PERMETHRIN 5% CREAM" = 0, "IVERMECTIN 3MG TABLETS" = 0, "BENZYL BENZOATE 25% APPLICATION" = 0)) %>% 
+  gt()%>%
+  tab_header(title = "Scabies Treatments by Health Board and Month", subtitle = "Data from Scottish Health Boards, June to December 2023") %>% 
+  cols_label(hb_name = "Health Board", month = "Month", "MALATHION 0.5% AQUEOUS LIQUID" = "Malathion (%)", "PERMETHRIN 5% CREAM" = "Permethrin (%)", "IVERMECTIN 3MG TABLETS" = "Ivermectin (%)", "BENZYL BENZOATE 25% APPLICATION" = "Benzyl Benzoate (%)") %>% 
+  fmt_number(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION"), decimals = 1) %>% 
+  cols_align(align = "center", columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION")) %>% 
+  summary_rows(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION"),fns = list("Average" = ~mean(., na.rm = TRUE)),fmt = list(~ fmt_number(., decimals = 2))) %>% 
+  grand_summary_rows(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION"),fns = list("Overall Average" = ~mean(., na.rm = TRUE)),fmt = list(~ fmt_number(., decimals = 1))) %>%  
+  cols_move(columns = "IVERMECTIN 3MG TABLETS", after = "BENZYL BENZOATE 25% APPLICATION") %>%
+  tab_spanner(label = "Topic Treatment", columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "BENZYL BENZOATE 25% APPLICATION")) %>% 
+    tab_spanner(label = "Oral Treatment", columns = c("IVERMECTIN 3MG TABLETS")) 
+
+presc_table
 
 ```
 

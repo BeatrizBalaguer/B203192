@@ -2,22 +2,31 @@
 title: "Assessment"
 author: "Bea"
 date: "2024-11-01"
-output: html_document
+output:
+  html_document:
+    theme: "journal"
+    toc: true
+    toc_depth: 2
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo=TRUE, message=FALSE, warnings=FALSE)
 ```
 
-In this report, the effect of seasonal depression in Scotland will be assessed.
+In this report, we examine the impact of a scabies outbreak on antiparasitic treatment trends and the preferred treatment options across Scotland during the second half of 2023 (June to December). The analysis focuses on prescription data to identify patterns and shifts in medication choices among health boards during this period.
+
+# Loading Required Packages and Data
+
+First, we will load the different **R packages** required for this report. These packages are necessary to clean, manipulate, visualize, and analyze the data. Next, we will load the **data for the months** we are interested in. In this case, we have used a URL to fetch the data, ensuring that the process can be replicated by anyone running the code.
 
 ```{r}
+#Load packages
 library(tidyverse)
 library(janitor) # cleaning data
 library(gt) # tables
-library(here) # directory structure (will be useful later)
-library(glue)
+library(prettydoc)
 
+#Load data
 data_june23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/66e9611a-fbea-45b2-9edd-351c388fd06d/download/pitc202306.csv") %>% 
   clean_names()
 
@@ -33,49 +42,53 @@ data_sept23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0
 data_oct2023 <- read_csv( "https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/94134438-db1d-4b8d-8f70-5e9b0e47bd03/download/pitc202310.csv") %>% 
   clean_names()
 
-```
-
-
-```{r}
-
 data_nov23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/21d11fed-a494-4e30-9bb6-46143c3b9530/download/pitc202311.csv") %>% 
   clean_names()
 
 data_dec23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/00cdf8d7-f784-4e87-894c-34f2540ea6ab/download/pitc202312.csv") %>% 
   clean_names()
 
-population_data <- read_csv("https://www.opendata.nhs.scot/dataset/7f010430-6ce1-4813-b25c-f7f335bdc4dc/resource/27a72cc8-d6d8-430c-8b4f-3109a9ceadb1/download/hb2019_pop_est_14102024.csv") %>% 
-  clean_names()
+```
 
+## Loading Additional Data
+Next, we will load additional data necessary for the analysis. In this case, we will load a list of the **Health Boards** and their corresponding names from which we will extract only the Health Board code and the Health Board name. Next, we will load the **population data**, which contains the population numbers for each Health Board. Since this is aggregated data, we will filter the dataset to select only the rows for "All". Finally, we will create a list of all the datasets for further processing.
+
+```{r}
+# Loading NHS Health Boards Data
 NHS_healthboards <- read_csv("https://www.opendata.nhs.scot/dataset/9f942fdb-e59e-44f5-b534-d6e17229cc7b/resource/652ff726-e676-4a20-abda-435b98dd7bdc/download/hb14_hb19.csv") %>% 
   clean_names()
 
+# Extracting Health Board code and name
 nhs_board <- NHS_healthboards %>% 
   select(hb, hb_name)
 
-#it is aggregated data, we choose All
+# Loading Population Data
+population_data <- read_csv("https://www.opendata.nhs.scot/dataset/7f010430-6ce1-4813-b25c-f7f335bdc4dc/resource/27a72cc8-d6d8-430c-8b4f-3109a9ceadb1/download/hb2019_pop_est_14102024.csv") %>% 
+  clean_names()
+
+#A# Filter for aggregated data (for "All" sexes) in 2023
 population_data2023 <- population_data %>% 
   filter(year == "2023" & sex == "All") %>% 
   select(hb, all_ages)
 
-
-dataset_year23 <- list(June = data_june23,
-                           July = data_july23,
-                           August = data_aug23,
-                           September = data_sept23,
-                           October = data_oct2023,
-                           November = data_nov23,
-                           December = data_dec23)
+#Creating a list of datasets for each month in 2023
+dataset_year23 <- list(June = data_june23, July = data_july23, August = data_aug23, September = data_sept23, October = data_oct2023, November = data_nov23, December = data_dec23)
 
 ```
 
-We created a factor including the different treatments for scabies: topical (permethrin cream, malathion lotion, benzyl benzoate lotion, crotamiton cream and sulfur ointment), oral (ivermectin). Then the datasets were filtered for these medications, excluding any missing values...
+# Data Analysis
+We created a factor including the different treatments for scabies: **topical** (permethrin cream, malathion lotion, benzyl benzoate lotion, crotamiton cream and sulfur ointment), **oral** (ivermectin). 
 
-To show the trend of the outbreak during the selected months, we joned all the datasets using a list... 
+## Trend Analysis over 2023
+To visualize the trend of the scabies outbreak during the second half of 2023 (June to December), we combined all the monthly datasets into one using a list. This allowed us to create a comprehensive dataset that captured scabies treatment prescription trends over the specified months.
+
+By joining the datasets, we ensured that the data was correctly aligned by month and treatment, and could be further analyzed to identify trends, patterns, and differences across health boards.
 
 ```{r}
+#Factor with the treatments
 scabies <- c("PERMETHRIN 5| PERMETHRIN_CR|MALATHI|BENZYL BENZOA| CROTAM|IVERMECTIN 3")
 
+#Creating a full data set with all the months.
 total_data23_sc <- dataset_year23 %>%
   imap_dfr(~ .x %>%
            filter(str_detect(bnf_item_description, scabies) & !is.na(bnf_item_description)) %>%
@@ -83,19 +96,10 @@ total_data23_sc <- dataset_year23 %>%
              summarise(number_of_paid_items = sum(number_of_paid_items, na.rm = TRUE), .groups = "drop") %>%
              mutate(month = .y))
 
-#with_gp <- total_data23_sc %>% 
-  #full_join(gp_practice)
-
-
-
 with_names_sc <- total_data23_sc %>% 
   full_join(nhs_board, join_by(hbt == hb)) %>% 
-  mutate(month = factor(month, levels = c("June", "July", "August", 
-                                          "September", "October", 
-                                          "November", "December"), 
-                        ordered = TRUE)) %>% 
+  mutate(month = factor(month, levels = c("June", "July", "August", "September", "October", "November", "December"), ordered = TRUE)) %>% 
   arrange(hb_name, month)
-
 
 #Trend over the months 
 no_gp <- with_names_sc %>% 
@@ -124,7 +128,9 @@ sc_line
 
 ```
 
-We will now analyse what are the preferred medication for scabies treatment.
+## Analysis of Preferred Scabies Medications
+In this section, we focus on identifying the preferred medications for scabies treatment across Scotland's health boards. To do so, we first isolated the relevant data, including the **health board, general practice, medication description**, and the **number of prescriptions** for each treatment. Next, we merged the dataset with the list of health boards to label each observation accordingly. This allowed us to associate each prescription with the
+We will now analyse what are the preferred medication for scabies treatment with a bar plot.
 
 ```{r}
 
@@ -152,9 +158,16 @@ sep_bar
 
 ```
 
-In this histogram, it is represented how the most common medication for scabies was permethrin cream. Which has been seen to have an impact on the resistance of scabies to permethrin, causing some resistances of permethrin. Moreover, this relationship between different scabies treatments might vary between countries, as in Scotland the production of ivermectin is based in Ukraine, leading to shortages of this medication???????? (REFERENCE!).
+This bar plot illustrates that the most commonly prescribed medication for scabies was permethrin cream. However, it is important to note that over time, resistance to permethrin has been observed in scabies populations, which may affect the efficacy of the treatment. Additionally, the preference for different scabies treatments can vary between countries, depending on factors such as medication availability and healthcare access.
 
-To visualize the relationship between the different medications, a table using the percentages of the prescription of each medication per each health board has been made. We will focus on the top 5 more affected parts of Scotland??????(wouldnt this depend on rate??). 
+## Relationship Between Different Treatments Over Time
+To visualize the relationship between the different scabies treatments and their distribution across months, we have created a table showing the percentage of prescriptions for each medication per health board. We will focus on the health boards that experienced the highest impact, which could depend on the rate of scabies cases in those regions.
+
+The table below presents the proportion of prescriptions for different scabies treatments (permethrin cream, malathion lotion, ivermectin tablets, and benzyl benzoate) from June to December 2023. It also shows how these proportions varied across different health boards in Scotland.
+
+By calculating the percentage of each treatment prescribed relative to the total prescriptions in each health board and month, we can examine trends over time. This analysis highlights the most commonly used treatments for scabies and offers insights into regional variations in medication usage.
+
+This table provides a clear view of the shifts in treatment preferences across health boards, enabling us to identify trends and the relative importance of different scabies treatments. The use of visual tools like this allows for a better understanding of the healthcare response to the scabies outbreak over the selected period.
 
 ```{r}
 
@@ -191,4 +204,4 @@ presc_table
 
 ```
 
-
+4TH FIGURE MAP

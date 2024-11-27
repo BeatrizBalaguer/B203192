@@ -6,7 +6,9 @@ output:
   html_document:
     theme: "journal"
     toc: true
-    toc_depth: 2
+    toc_depth: 3
+    fig_width: 12
+    fig_height: 8
 ---
 
 ```{r setup, include=FALSE}
@@ -15,7 +17,7 @@ knitr::opts_chunk$set(echo=TRUE, message=FALSE, warnings=FALSE)
 
 In this report, we examine the impact of a scabies outbreak on antiparasitic treatment trends and the preferred treatment options across Scotland during the second half of 2023 (June to December). The analysis focuses on prescription data to identify patterns and shifts in medication choices among health boards during this period.
 
-# Loading Required Packages and Data
+## Loading Required Packages and Data
 
 First, we will load the different **R packages** required for this report. These packages are necessary to clean, manipulate, visualize, and analyze the data. Next, we will load the **data for the months** we are interested in. In this case, we have used a URL to fetch the data, ensuring that the process can be replicated by anyone running the code.
 
@@ -24,143 +26,99 @@ First, we will load the different **R packages** required for this report. These
 library(tidyverse)
 library(janitor) # cleaning data
 library(gt) # tables
-library(prettydoc)
+library(gtExtras)
+library(purrr)
+library(ggrepel)
+library(sf)
+library(patchwork)
+library(here)
+options(timeout = 300)
+```
 
+```{r}
 #Load data
 data_june23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/66e9611a-fbea-45b2-9edd-351c388fd06d/download/pitc202306.csv") %>% 
   clean_names()
-
-data_july23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/7bb45ee6-6f1c-45f4-933b-958bdbe0ca4f/download/pitc202307.csv") %>%
+data_july23 <- read.csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/7bb45ee6-6f1c-45f4-933b-958bdbe0ca4f/download/pitc202307.csv") %>%
   clean_names()
-
-data_aug23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/72ca4ad2-0228-4672-9eb0-cc911e4a8ca7/download/pitc202308.csv") %>% 
+data_aug23 <- read.csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/72ca4ad2-0228-4672-9eb0-cc911e4a8ca7/download/pitc202308.csv") %>% 
   clean_names()
-
-data_sept23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/2d3d240f-1467-4a91-9f0e-769745650cb9/download/pitc202309.csv") %>% 
+data_sept23 <- read.csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/2d3d240f-1467-4a91-9f0e-769745650cb9/download/pitc202309.csv") %>% 
   clean_names()
-
-data_oct2023 <- read_csv( "https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/94134438-db1d-4b8d-8f70-5e9b0e47bd03/download/pitc202310.csv") %>% 
+data_oct2023 <- read.csv( "https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/94134438-db1d-4b8d-8f70-5e9b0e47bd03/download/pitc202310.csv") %>% 
   clean_names()
-
-data_nov23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/21d11fed-a494-4e30-9bb6-46143c3b9530/download/pitc202311.csv") %>% 
+data_nov23 <- read.csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/21d11fed-a494-4e30-9bb6-46143c3b9530/download/pitc202311.csv") %>% 
   clean_names()
-
-data_dec23 <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/00cdf8d7-f784-4e87-894c-34f2540ea6ab/download/pitc202312.csv") %>% 
+data_dec23 <- read.csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/00cdf8d7-f784-4e87-894c-34f2540ea6ab/download/pitc202312.csv") %>% 
   clean_names()
-
 ```
 
-## Loading Additional Data
-Next, we will load additional data necessary for the analysis. In this case, we will load a list of the **Health Boards** and their corresponding names from which we will extract only the Health Board code and the Health Board name. Next, we will load the **population data**, which contains the population numbers for each Health Board. Since this is aggregated data, we will filter the dataset to select only the rows for "All". Finally, we will create a list of all the datasets for further processing.
+### Loading Additional Data
+Next, we will load additional data necessary for the analysis. In this case, we will load a list of the **Health Boards** and their corresponding names from which we will extract only the Health Board code and the Health Board name. Next, we will load the **population data**, which contains the population numbers for each Health Board. Since this is aggregated data, we will filter the dataset to select only the rows for "All". Finally, we will create a list of all the datasets for further processing. 
+
+- [GP Practices](https://data.spatialhub.scot/dataset/gp_practices-is/resource/8389fd1d-563d-4c05-9833-26d9f07fd6cd)BEA!! that GP practice data i dont need however i do want to include hyperlinks, think about smt!!!!!
 
 ```{r}
 # Loading NHS Health Boards Data
-NHS_healthboards <- read_csv("https://www.opendata.nhs.scot/dataset/9f942fdb-e59e-44f5-b534-d6e17229cc7b/resource/652ff726-e676-4a20-abda-435b98dd7bdc/download/hb14_hb19.csv") %>% 
+NHS_healthboards <- read.csv("https://www.opendata.nhs.scot/dataset/9f942fdb-e59e-44f5-b534-d6e17229cc7b/resource/652ff726-e676-4a20-abda-435b98dd7bdc/download/hb14_hb19.csv") %>% 
   clean_names()
-
 # Extracting Health Board code and name
 nhs_board <- NHS_healthboards %>% 
   select(hb, hb_name)
-
 # Loading Population Data
-population_data <- read_csv("https://www.opendata.nhs.scot/dataset/7f010430-6ce1-4813-b25c-f7f335bdc4dc/resource/27a72cc8-d6d8-430c-8b4f-3109a9ceadb1/download/hb2019_pop_est_14102024.csv") %>% 
+population_data <- read.csv("https://www.opendata.nhs.scot/dataset/7f010430-6ce1-4813-b25c-f7f335bdc4dc/resource/27a72cc8-d6d8-430c-8b4f-3109a9ceadb1/download/hb2019_pop_est_14102024.csv") %>% 
   clean_names()
-
-#A# Filter for aggregated data (for "All" sexes) in 2023
+# Filter for aggregated data (for "All" sexes) in 2023
 population_data2023 <- population_data %>% 
   filter(year == "2023" & sex == "All") %>% 
   select(hb, all_ages)
-
+#Data for GPs
+gp_scot <- read.csv("https://www.opendata.nhs.scot/dataset/f23655c3-6e23-4103-a511-a80d998adb90/resource/6e2b279f-5b9e-41ff-971c-1819c3df8ba9/download/practice_contactdetails_oct2023-open-data.csv") %>% 
+  clean_names() %>% 
+  select(practice_code, data_zone, hb)
 #Creating a list of datasets for each month in 2023
 dataset_year23 <- list(June = data_june23, July = data_july23, August = data_aug23, September = data_sept23, October = data_oct2023, November = data_nov23, December = data_dec23)
 
 ```
 
-# Data Analysis
+## Data Analysis
 We created a factor including the different treatments for scabies: **topical** (permethrin cream, malathion lotion, benzyl benzoate lotion, crotamiton cream and sulfur ointment), **oral** (ivermectin). 
 
-## Trend Analysis over 2023
+### Trend Analysis over 2023
 To visualize the trend of the scabies outbreak during the second half of 2023 (June to December), we combined all the monthly datasets into one using a list. This allowed us to create a comprehensive dataset that captured scabies treatment prescription trends over the specified months.
 
 By joining the datasets, we ensured that the data was correctly aligned by month and treatment, and could be further analyzed to identify trends, patterns, and differences across health boards.
 
 ```{r}
 #Factor with the treatments
-scabies <- c("PERMETHRIN 5| PERMETHRIN_CR|MALATHI|BENZYL BENZOA| CROTAM|IVERMECTIN 3")
-
+scabies <- c("PERMETHRIN 5|PERMETHRIN_CR|MALATHI|BENZYL BENZOA|IVERMECTIN 3")
 #Creating a full data set with all the months.
 total_data23_sc <- dataset_year23 %>%
-  imap_dfr(~ .x %>%
-           filter(str_detect(bnf_item_description, scabies) & !is.na(bnf_item_description)) %>%
-             group_by(hbt, gp_practice) %>%
-             summarise(number_of_paid_items = sum(number_of_paid_items, na.rm = TRUE), .groups = "drop") %>%
-             mutate(month = .y))
-
-with_names_sc <- total_data23_sc %>% 
-  full_join(nhs_board, join_by(hbt == hb)) %>% 
-  mutate(month = factor(month, levels = c("June", "July", "August", "September", "October", "November", "December"), ordered = TRUE)) %>% 
-  arrange(hb_name, month)
-
+  imap_dfr(~ .x %>%filter(str_detect(bnf_item_description, scabies) & !is.na(bnf_item_description)) %>% group_by(hbt, gp_practice) %>%summarise(paid_quantity = sum(paid_quantity, na.rm = TRUE), .groups = "drop") %>%mutate(month = .y))
+with_names_sc <- total_data23_sc %>% full_join(nhs_board, join_by(hbt == hb)) %>% mutate(month =factor(month, levels = c("June", "July", "August", "September", "October", "November", "December"),ordered = TRUE)) %>%arrange(hb_name, month)
 #Trend over the months 
-no_gp <- with_names_sc %>% 
-  filter(!is.na(month)) %>% 
-  group_by(month, hb_name) %>% 
-  summarise(number_of_paid_items = sum(number_of_paid_items))
+no_gp <- with_names_sc %>% filter(!is.na(month)) %>% group_by(month, hb_name, hbt) %>% summarise(paid_quantity = sum(paid_quantity))
+rate_sc <- no_gp %>% full_join(population_data2023, join_by(hbt == hb)) %>% mutate(rate_per1k = paid_quantity/all_ages * 1000)
+sc_squares <- rate_sc %>%filter(!is.na(month)) %>% ggplot(aes(x = month, y = rate_per1k, colour = hb_name))+  geom_line(aes(group = hb_name), size = 1) + geom_text_repel(data = . %>% arrange(desc(month)) %>% group_by(hb_name) %>% slice(1),aes(label = round(rate_per1k, 1)),nudge_x = 0.5,  size = 3, direction = "y",  box.padding = 0.3,point.padding = 0.3, show.legend = FALSE) +geom_point(data = data.frame(hb_name = unique(rate_sc$hb_name)), aes(x = NA_real_, y = NA_real_, colour = hb_name), shape = 15, size = 5,show.legend = TRUE) +  labs(title = "Scabies Outbreak in Scotland (June to December 2023)", subtitle = "Monthly Trends in Scabies Treatment Prescriptions",   x = "Month", y = "Quatity of Antiparasitic Prescriptions /10,000 people", colour = "Health Board") +theme_bw() + guides( colour =guide_legend(title.position = "top", title.hjust = 0.5, override.aes = list(shape = 15,     size = 5)))+theme(legend.position = "bottom", legend.direction = "horizontal") + scale_color_manual(values = c("#e6194b", "#ffe119", "#B0C4DE", "#f58231","#911eb4", "#46f0f0","#f032e6", "#bcf60c","#3cb44b", "#fabebe", "#0000FF", "#e6beff","#9a6324", "#606060"))
 
-sc_line <- no_gp %>% 
-  ggplot(aes(x= month, y = number_of_paid_items))+
-  geom_line(aes(group = hb_name, colour = hb_name), size = 1) +
-  labs(title = "Scabies Outbreak in Scotland (June to December 2023)", subtitle = "Monthly Trends in Scabies Treatment Prescriptions", x = "Month", y = "Number of Antiparasitic Prescriptions", colour = "Health Board")+
-  theme_bw()+
-  guides(colour = guide_legend(title.position = "top", title.hjust = 0.5))+
-  theme(legend.position = "bottom", legend.direction = "horizontal")+
-  geom_text(data=. %>% 
-              arrange(desc(month)) %>% 
-              group_by(hb_name) %>% 
-              slice(1), 
-            aes(label=number_of_paid_items), 
-            position=position_nudge(0.1), hjust=0, show.legend=FALSE)+
-  scale_color_manual(values=c("#e6194b", "#ffe119", "#4363d8", "#f58231", 
-              "#911eb4", "#46f0f0", "#f032e6", "#bcf60c", "#3cb44b", "#fabebe",
-              "#008080", "#e6beff", "#9a6324", "#fffac8"))
-
-sc_line
-
+sc_squares######check it because the last 2 nhbs cant be seen well
 ```
 
-## Analysis of Preferred Scabies Medications
+### Analysis of Preferred Scabies Medications
 In this section, we focus on identifying the preferred medications for scabies treatment across Scotland's health boards. To do so, we first isolated the relevant data, including the **health board, general practice, medication description**, and the **number of prescriptions** for each treatment. Next, we merged the dataset with the list of health boards to label each observation accordingly. This allowed us to associate each prescription with the
 We will now analyse what are the preferred medication for scabies treatment with a bar plot.
 
 ```{r}
-
-separated_data <- dataset_year23 %>%
-  imap_dfr(~ .x %>%
-            select(hbt, gp_practice, bnf_item_description, number_of_paid_items) %>% 
-  filter(str_detect(bnf_item_description, scabies)) %>% 
-             mutate(month = .y))
-
-sep_with_names_sc <- separated_data %>% 
-  full_join(nhs_board, join_by(hbt == hb)) %>% 
-  filter(!is.na(number_of_paid_items))
-
-sep_with_population_sc <- sep_with_names_sc %>% 
-  full_join(population_data2023, join_by(hbt == hb)) 
-
-sep_bar <- sep_with_names_sc %>% 
-  ggplot(aes(x = hb_name, y = number_of_paid_items))+ scale_fill_brewer(palette = "Spectral")+
-  geom_col(aes(fill = bnf_item_description), width = .5)+
-  theme_classic()+
-  theme(axis.text.x = element_text(angle = 65, hjust = 1))+
-  labs(title = "Preferred Scabies Treatments Across Scotland", subtitle = "Breakdown by health board and treatment type (June - December 2023)", x = "Health Board", y = "Number of Prescriptions", fill = "Antiparasitic Medication")
-
+separated_data <- dataset_year23 %>%imap_dfr(~ .x %>%select(hbt, gp_practice, bnf_item_description, paid_quantity) %>%filter(str_detect(bnf_item_description, scabies)) %>% mutate(month = .y))
+sep_with_names_sc <- separated_data %>% full_join(nhs_board, join_by(hbt == hb)) %>%filter(!is.na(paid_quantity))
+sep_with_population_sc <- sep_with_names_sc %>%full_join(population_data2023, join_by(hbt == hb)) 
+sep_bar <- sep_with_names_sc %>% ggplot(aes(x = hb_name, y = paid_quantity))+ scale_fill_brewer(palette = "Spectral")+geom_col(aes(fill = bnf_item_description), width = .5)+theme_classic()+theme(axis.text.x = element_text(angle = 65, hjust = 1))+labs(title = "Preferred Scabies Treatments Across Scotland", subtitle = "Breakdown by health board and treatment type (June - December 2023)", x = "Health Board", y = "Number of Prescriptions", fill = "Antiparasitic Medication")
 sep_bar
-
 ```
 
-This bar plot illustrates that the most commonly prescribed medication for scabies was permethrin cream. However, it is important to note that over time, resistance to permethrin has been observed in scabies populations, which may affect the efficacy of the treatment. Additionally, the preference for different scabies treatments can vary between countries, depending on factors such as medication availability and healthcare access.
+This bar plot illustrates that the most commonly prescribed medication for scabies was permethrin cream. However, it is important to note that over time, resistance to permethrin has been observed in scabies populations, which may affect the efficacy of the treatment, and thus more affected areas may choose alternative treatments. Additionally, the preference for different scabies treatments can vary between countries, depending on factors such as medication availability and healthcare access.
 
-## Relationship Between Different Treatments Over Time
+### Relationship Between Different Treatments Over Time
 To visualize the relationship between the different scabies treatments and their distribution across months, we have created a table showing the percentage of prescriptions for each medication per health board. We will focus on the health boards that experienced the highest impact, which could depend on the rate of scabies cases in those regions.
 
 The table below presents the proportion of prescriptions for different scabies treatments (permethrin cream, malathion lotion, ivermectin tablets, and benzyl benzoate) from June to December 2023. It also shows how these proportions varied across different health boards in Scotland.
@@ -171,37 +129,31 @@ This table provides a clear view of the shifts in treatment preferences across h
 
 ```{r}
 
-total_presc_table <- sep_with_names_sc %>%
-  group_by(hb_name, month) %>%
-  summarise(total_prescriptions = sum(number_of_paid_items)) %>%
-  ungroup()
-
-
-presc_table <- sep_with_names_sc %>% 
-  filter(!is.na(bnf_item_description)) %>%
-  group_by(hb_name, month, bnf_item_description) %>% 
-  summarise(treatment_prescriptions = sum(number_of_paid_items, na.rm = TRUE)) %>% 
-  full_join(total_presc_table, by = c("hb_name", "month")) %>% 
-  mutate(percentage = (treatment_prescriptions / total_prescriptions) * 100)%>%
-  group_by(hb_name) %>% 
-  select(hb_name, month, bnf_item_description, percentage) %>% 
-  mutate(month = factor(month, levels = c("June", "July", "August", "September", "October", "November", "December"))) %>%
-  arrange(hb_name, month) %>%
-  pivot_wider(names_from = bnf_item_description, values_from = percentage) %>%
-  replace_na(list("MALATHION 0.5% AQUEOUS LIQUID" = 0, "PERMETHRIN 5% CREAM" = 0, "IVERMECTIN 3MG TABLETS" = 0, "BENZYL BENZOATE 25% APPLICATION" = 0)) %>% 
-  gt()%>%
-  tab_header(title = "Scabies Treatments by Health Board and Month", subtitle = "Data from Scottish Health Boards, June to December 2023") %>% 
-  cols_label(hb_name = "Health Board", month = "Month", "MALATHION 0.5% AQUEOUS LIQUID" = "Malathion (%)", "PERMETHRIN 5% CREAM" = "Permethrin (%)", "IVERMECTIN 3MG TABLETS" = "Ivermectin (%)", "BENZYL BENZOATE 25% APPLICATION" = "Benzyl Benzoate (%)") %>% 
-  fmt_number(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION"), decimals = 1) %>% 
-  cols_align(align = "center", columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION")) %>% 
-  summary_rows(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION"),fns = list("Average" = ~mean(., na.rm = TRUE)),fmt = list(~ fmt_number(., decimals = 2))) %>% 
-  grand_summary_rows(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION"),fns = list("Overall Average" = ~mean(., na.rm = TRUE)),fmt = list(~ fmt_number(., decimals = 1))) %>%  
-  cols_move(columns = "IVERMECTIN 3MG TABLETS", after = "BENZYL BENZOATE 25% APPLICATION") %>%
-  tab_spanner(label = "Topic Treatment", columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "BENZYL BENZOATE 25% APPLICATION")) %>% 
-    tab_spanner(label = "Oral Treatment", columns = c("IVERMECTIN 3MG TABLETS")) 
-
+total_presc_table <- sep_with_names_sc %>%group_by(hb_name, month) %>%summarise(total_prescriptions =sum(paid_quantity)) %>% ungroup()
+presc_table <- sep_with_names_sc %>% filter(!is.na(bnf_item_description)) %>%group_by(hb_name, month, bnf_item_description) %>% summarise(treatment_prescriptions = sum(paid_quantity, na.rm = TRUE)) %>% 
+  full_join(total_presc_table, by = c("hb_name", "month")) %>% mutate(percentage =(treatment_prescriptions / total_prescriptions) * 100)%>%group_by(hb_name) %>% select(hb_name, month, bnf_item_description, percentage) %>% mutate(month = factor(month, levels = c("June", "July", "August", "September", "October", "November", "December"))) %>%filter(month %in% c("June", "September", "December"), hb_name %in% c("NHS Shetland", "NHS Tayside", "NHS Lothian", "NHS Grampian", "NHS Fife")) %>% arrange(hb_name, month) %>%pivot_wider(names_from = bnf_item_description, values_from = percentage) %>%replace_na(list("MALATHION 0.5% AQUEOUS LIQUID" = 0, "PERMETHRIN 5% CREAM" = 0, "IVERMECTIN 3MG TABLETS" = 0, "BENZYL BENZOATE 25% APPLICATION" = 0)) %>% gt()%>%tab_header(title = "Scabies Treatments by Health Board and Month", subtitle = "Data from Scottish Health Boards, June to December 2023") %>% 
+  cols_label(hb_name = "Health Board", month = "Month", "MALATHION 0.5% AQUEOUS LIQUID" = "Malathion (%)", "PERMETHRIN 5% CREAM" = "Permethrin (%)", "IVERMECTIN 3MG TABLETS" = "Ivermectin (%)", "BENZYL BENZOATE 25% APPLICATION" = "Benzyl Benzoate (%)") %>% fmt_number(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION"), decimals = 1) %>% cols_align(align = "center", columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION")) %>% summary_rows(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION"),fns = list("Average" = ~mean(., na.rm = TRUE)),fmt = list(~ fmt_number(., decimals = 2))) %>% grand_summary_rows(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS","BENZYL BENZOATE 25% APPLICATION"),fns = list("Overall Average" = ~mean(., na.rm = TRUE)),fmt = list(~ fmt_number(., decimals = 1))) %>%cols_move(columns = "IVERMECTIN 3MG TABLETS", after = "BENZYL BENZOATE 25% APPLICATION") %>%tab_spanner(label = "Topic Treatment", columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "BENZYL BENZOATE 25% APPLICATION")) %>% tab_spanner(label = "Oral Treatment", columns = c("IVERMECTIN 3MG TABLETS")) %>% tab_style(style = cell_fill(color = alpha("#e6beff", 0.2)),locations = cells_body(rows = hb_name == "NHS Shetland")) %>%tab_style(style = cell_fill(color = alpha("maroon", 0.2)),locations = cells_body(rows = hb_name == "NHS Tayside"))%>%  tab_style(style = cell_fill(color = alpha("lightblue", 0.2)),locations = cells_body(rows = hb_name == "NHS Lothian")) %>%tab_style(style = cell_fill(color = alpha("#D3D3D9", 0.2)),locations = cells_body(rows = hb_name == "NHS Grampian")) %>%tab_style(style = cell_fill(color = alpha("#B4E0B8", 0.2)),locations = cells_body(rows = hb_name == "NHS Fife")) %>%tab_style(style = cell_fill(color = alpha("#FFF2B2", 0.7)), locations = cells_summary(columns = everything())) %>%tab_style(style = cell_text(weight = "bold"), locations = cells_summary(columns = everything())) %>%tab_style(style = cell_fill(color =alpha("#FFB84D", 0.4)),locations = cells_grand_summary(columns = everything())) %>%tab_style(style = cell_text(weight ="bold"), locations = cells_grand_summary(columns = everything()))
 presc_table
 
+presc_table2 <- sep_with_names_sc %>% filter(!is.na(bnf_item_description)) %>%group_by(hb_name, month, bnf_item_description) %>%summarise(treatment_prescriptions = sum(paid_quantity, na.rm = TRUE)) %>%   full_join(total_presc_table, by = c("hb_name", "month")) %>% mutate(percentage = (treatment_prescriptions / total_prescriptions) * 100) %>%group_by(hb_name) %>% select(hb_name, month, bnf_item_description, percentage) %>% mutate(month = factor(month, levels = c("June", "July", "August", "September", "October", "November", "December"))) %>%filter(month %in% c("June", "September", "December"), hb_name %in% c("NHS Shetland", "NHS Tayside", "NHS Lothian", "NHS Grampian", "NHS Fife")) %>% arrange(hb_name, month) %>% pivot_wider(names_from = bnf_item_description, values_from = percentage) %>%replace_na(list("MALATHION 0.5% AQUEOUS LIQUID" = 0, "PERMETHRIN 5% CREAM" = 0, "IVERMECTIN 3MG TABLETS" = 0, "BENZYL BENZOATE 25% APPLICATION" = 0)) %>% gt() %>%tab_header(title = "Scabies Treatments by Health Board and Month",subtitle = "Data from Scottish Health Boards, June to December 2023") %>% cols_label(hb_name = "Health Board", month = "Month", "MALATHION 0.5% AQUEOUS LIQUID" = "Malathion (%)", "PERMETHRIN 5% CREAM" = "Permethrin (%)", "IVERMECTIN 3MG TABLETS" = "Ivermectin (%)", "BENZYL BENZOATE 25% APPLICATION" = "Benzyl Benzoate (%)") %>% fmt_number(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS", "BENZYL BENZOATE 25% APPLICATION"), decimals = 1) %>% cols_align(align = "center", columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS", "BENZYL BENZOATE 25% APPLICATION")) %>%gt_highlight_rows(rows = hb_name == "NHS Shetland", fill = alpha("#e6beff", 0.2)) %>% gt_highlight_rows(rows = hb_name == "NHS Tayside", fill = alpha("maroon", 0.2)) %>%gt_highlight_rows(rows = hb_name == "NHS Lothian", fill = alpha("lightblue", 0.2)) %>%gt_highlight_rows(rows = hb_name == "NHS Grampian", fill = alpha("#D3D3D9", 0.2)) %>%  gt_highlight_rows(rows = hb_name == "NHS Fife", fill = alpha("#B4E0B8", 0.2)) %>%summary_rows(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS", "BENZYL BENZOATE 25% APPLICATION"),fns = list("Average" = ~mean(., na.rm = TRUE)),fmt = list(~ fmt_number(., decimals = 2))) %>%grand_summary_rows(columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "IVERMECTIN 3MG TABLETS", "BENZYL BENZOATE 25% APPLICATION"),fns = list("Overall Average" = ~mean(., na.rm = TRUE)),fmt = list(~ fmt_number(., decimals = 1))) %>%cols_move(columns = "IVERMECTIN 3MG TABLETS", after = "BENZYL BENZOATE 25% APPLICATION") %>% tab_spanner(label = "Topic Treatment", columns = c("MALATHION 0.5% AQUEOUS LIQUID", "PERMETHRIN 5% CREAM", "BENZYL BENZOATE 25% APPLICATION")) %>%tab_spanner(label = "Oral Treatment", columns = c("IVERMECTIN 3MG TABLETS")) %>% tab_style(style = cell_fill(color = alpha("#FFF2B2", 0.7)),locations = cells_summary(columns = everything()))%>%tab_style(style = cell_text(weight = "bold"),locations = cells_summary(columns = everything()))%>%tab_style(style = cell_fill(color = alpha("#FFB84D", 0.4)),  locations = cells_grand_summary(columns = everything())) %>%tab_style(style = cell_text(weight = "bold"), locations = cells_grand_summary(columns = everything())) 
+presc_table2
 ```
 
 4TH FIGURE MAP
+Limitation about the data and its localization
+
+```{r}
+data_zones <- st_read(here("data", "SG_DataZone_Bdry_2011.shp"))
+DataZone_with_hb <- read_csv(here("data","DataZone2011lookup_2024-07-04 (1).csv")) %>%clean_names() %>%  select(dz2011_code, hb_code)
+with_datangp <- total_data23_sc %>% full_join(gp_scot, join_by(gp_practice == practice_code)) %>% full_join(data_zones, join_by(data_zone == DataZone)) %>% full_join(DataZone_with_hb, join_by(data_zone == dz2011_code)) %>% mutate(paid_quantity = replace_na(paid_quantity, 0)) %>% select(-hbt, -hb)
+with_datangp_sf <-  st_as_sf(with_datangp)
+map_shetland <- with_datangp_sf %>% filter(hb_code == "S08000026") %>%   ggplot(aes(fill =paid_quantity)) +geom_sf(colour = NA) + scale_fill_distiller(palette = "Blues", direction = 1, name = "No.") +  theme_void() +ggtitle("NHS Shetland")
+map_tayside <- with_datangp_sf %>%filter(hb_code == "S08000030") %>%ggplot(aes(fill = paid_quantity)) + geom_sf(colour =  NA) + scale_fill_distiller(palette = "Blues", direction = 1, name = "No.") +  theme_void() +ggtitle("NHS Tayside")
+map_lothian <- with_datangp_sf %>% filter(hb_code == "S08000024") %>% ggplot(aes(fill = paid_quantity)) +  geom_sf(colour =  NA) +scale_fill_distiller(palette = "Blues", direction = 1, name = "No.") + theme_void() +ggtitle("NHS Lothian")
+map_grampian <- with_datangp_sf %>% filter(hb_code == "S08000020") %>% ggplot(aes(fill = paid_quantity)) +geom_sf(colour =  NA) + scale_fill_distiller(palette = "Blues", direction = 1, name = "No.") +  theme_void() +ggtitle("NHS Grampian")
+map_fife <- with_datangp_sf %>% filter(hb_code == "S08000029") %>% ggplot(aes(fill = paid_quantity)) +  geom_sf(colour =  NA) +scale_fill_distiller(palette = "Blues", direction = 1, name = "No.") +  theme_void() +ggtitle("NHS Fife")
+fig_map <- map_shetland + map_tayside + map_fife + map_lothian + map_grampian+plot_layout(ncol = 3, nrow = 2)
+fig_map
+```
+
+It is worth noting that there are around 300 rows that could be not included because they are under the "gp practice" code 99999, 99998, 99997, 99996, as these are the codes for dentistries, hospitals, unallocated? , and pharmacies. These cant be located in a map.
